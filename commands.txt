@@ -1,0 +1,2 @@
+.churnAirflow/Scripts/Activate.ps1
+
