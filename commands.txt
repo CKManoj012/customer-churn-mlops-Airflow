@@ -1,2 +1,4 @@
 .churnAirflow/Scripts/Activate.ps1
 
+aws sso login --profile churn-dev
+
