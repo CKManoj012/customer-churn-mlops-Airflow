@@ -136,4 +136,8 @@ processor.run(
             ),
         ),
     ],
+    wait=False,
+    logs=False
 )
+print("SageMaker Processing Job submitted successfully.")
+print(f"Job name: {processor.latest_job.name}")
