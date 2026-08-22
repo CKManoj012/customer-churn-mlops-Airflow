@@ -140,4 +140,5 @@ processor.run(
     logs=False
 )
 print("SageMaker Processing Job submitted successfully.")
-print(f"Job name: {processor.latest_job.name}")
+# print(f"Job name: {processor.latest_job.name}")
+

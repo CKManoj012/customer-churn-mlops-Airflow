@@ -165,7 +165,7 @@ class Iterator : public util::EqualityComparable<Iterator<T>> {
     }
 
     Result<T> operator*() {
-      ARROW_RETURN_NOT_OK(value_);
+      ARROW_RETURN_NOT_OK(value_.status());
 
       auto value = std::move(value_);
       value_ = IterationTraits<T>::End();

@@ -259,6 +259,61 @@ def main():
     print("FEATURE ENGINEERING COMPLETED")
     print("=" * 60)
 
+    # --------------------------------------------------
+    # Prepare XGBoost datasets
+    # Target MUST be the first column
+    # CSV MUST NOT contain headers
+    # --------------------------------------------------
+
+    def prepare_xgboost_dataset(df, target_column="churn_value"):
+        feature_columns = [
+            column
+            for column in df.columns
+            if column != target_column
+        ]
+
+        return df[
+            [target_column] + feature_columns
+        ]
+
+
+    train_xgb = prepare_xgboost_dataset(train_df)
+    validation_xgb = prepare_xgboost_dataset(validation_df)
+    test_xgb = prepare_xgboost_dataset(test_df)
+
+
+    # --------------------------------------------------
+    # Save outputs
+    # --------------------------------------------------
+
+    model_df.to_parquet(
+        FEATURE_DIR / "features.parquet",
+        index=False,
+    )
+
+    train_xgb.to_csv(
+        TRAIN_DIR / "train.csv",
+        index=False,
+        header=False,
+    )
+
+    validation_xgb.to_csv(
+        VALIDATION_DIR / "validation.csv",
+        index=False,
+        header=False,
+    )
+
+    test_xgb.to_csv(
+        TEST_DIR / "test.csv",
+        index=False,
+        header=False,
+    )
+
+    print("XGBoost training files created.")
+    print(f"Train shape: {train_xgb.shape}")
+    print(f"Validation shape: {validation_xgb.shape}")
+    print(f"Test shape: {test_xgb.shape}")
+
 
 if __name__ == "__main__":
     main()

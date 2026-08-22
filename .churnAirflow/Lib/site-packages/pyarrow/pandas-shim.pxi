@@ -67,16 +67,14 @@ cdef class _PandasAPIShim(object):
             self._have_pandas = False
             if raise_:
                 raise ImportError(
-                    f"pyarrow requires pandas 1.0.0 or above, pandas {self._version} is "
-                    "installed"
+                    "pyarrow requires pandas 1.0.0 or above, pandas {} is "
+                    "installed".format(self._version)
                 )
             else:
                 warnings.warn(
-                    f"pyarrow requires pandas 1.0.0 or above, pandas {self._version} is "
+                    "pyarrow requires pandas 1.0.0 or above, pandas {} is "
                     "installed. Therefore, pandas-specific integration is not "
-                    "used.",
-                    stacklevel=2
-                )
+                    "used.".format(self._version), stacklevel=2)
                 return
 
         self._is_v1 = self._loose_version < Version('2.0.0')

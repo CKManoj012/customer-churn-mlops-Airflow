@@ -30,8 +30,9 @@
 #include <utility>
 
 #include "arrow/status.h"
-#include "arrow/type_fwd.h"
+#include "arrow/type.h"
 #include "arrow/type_traits.h"
+#include "arrow/util/double_conversion.h"
 #include "arrow/util/macros.h"
 #include "arrow/util/string.h"
 #include "arrow/util/time.h"

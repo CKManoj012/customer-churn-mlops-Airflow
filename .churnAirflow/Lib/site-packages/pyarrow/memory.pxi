@@ -29,8 +29,9 @@ cdef class MemoryPool(_Weakrefable):
     """
 
     def __init__(self):
-        raise TypeError(f"Do not call {self.__class__.__name__}'s constructor directly, "
-                        "use pyarrow.*_memory_pool instead.")
+        raise TypeError("Do not call {}'s constructor directly, "
+                        "use pyarrow.*_memory_pool instead."
+                        .format(self.__class__.__name__))
 
     cdef void init(self, CMemoryPool* pool):
         self.pool = pool
@@ -125,8 +126,9 @@ cdef class LoggingMemoryPool(MemoryPool):
         unique_ptr[CLoggingMemoryPool] logging_pool
 
     def __init__(self):
-        raise TypeError(f"Do not call {self.__class__.__name__}'s constructor directly, "
-                        "use pyarrow.logging_memory_pool instead.")
+        raise TypeError("Do not call {}'s constructor directly, "
+                        "use pyarrow.logging_memory_pool instead."
+                        .format(self.__class__.__name__))
 
 
 cdef class ProxyMemoryPool(MemoryPool):
@@ -139,8 +141,9 @@ cdef class ProxyMemoryPool(MemoryPool):
         unique_ptr[CProxyMemoryPool] proxy_pool
 
     def __init__(self):
-        raise TypeError(f"Do not call {self.__class__.__name__}'s constructor directly, "
-                        "use pyarrow.proxy_memory_pool instead.")
+        raise TypeError("Do not call {}'s constructor directly, "
+                        "use pyarrow.proxy_memory_pool instead."
+                        .format(self.__class__.__name__))
 
 
 def default_memory_pool():

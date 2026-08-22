@@ -74,7 +74,7 @@ cdef class HadoopFileSystem(FileSystem):
 
         if not host.startswith(('hdfs://', 'viewfs://')) and host != "default":
             # TODO(kszucs): do more sanitization
-            host = f'hdfs://{host}'
+            host = 'hdfs://{}'.format(host)
 
         options.ConfigureEndPoint(tobytes(host), int(port))
         options.ConfigureReplication(replication)

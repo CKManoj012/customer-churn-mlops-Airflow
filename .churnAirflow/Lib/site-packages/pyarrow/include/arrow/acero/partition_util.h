@@ -22,7 +22,6 @@
 #include <cstdint>
 #include <functional>
 #include <random>
-
 #include "arrow/acero/util.h"
 #include "arrow/buffer.h"
 #include "arrow/util/pcg_random.h"
