@@ -1,0 +1,120 @@
+name: Customer Churn MLOps CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+
+permissions:
+  contents: read
+  id-token: write
+
+
+env:
+  AWS_REGION: ap-south-1
+
+  AIRFLOW_BUCKET: customer-churn-airflow-dev-558311101304-ap-south-1
+
+  DATA_BUCKET: customer-churn-mlops-dev-558311101304-ap-south-1
+
+
+jobs:
+
+  validate:
+
+    name: Validate Python
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+
+      - name: Check Python syntax
+        run: |
+          python -m compileall dags src scripts
+
+
+  deploy:
+
+    name: Deploy to AWS
+
+    needs: validate
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::558311101304:role/CustomerChurnGitHubDeploymentRole
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      - name: Deploy Airflow DAGs
+        run: |
+          aws s3 sync \
+            dags/ \
+            s3://${AIRFLOW_BUCKET}/dags/ \
+            --delete
+
+
+      - name: Deploy MWAA requirements
+        run: |
+          aws s3 cp \
+            requirements.txt \
+            s3://${AIRFLOW_BUCKET}/requirements.txt
+
+
+      - name: Deploy feature engineering script
+        run: |
+          aws s3 cp \
+            src/processing/feature_engineering.py \
+            s3://${DATA_BUCKET}/scripts/sagemaker/feature_engineering.py
+
+
+      - name: Deploy evaluation scripts
+        run: |
+          aws s3 sync \
+            src/evaluation/ \
+            s3://${DATA_BUCKET}/scripts/sagemaker/evaluation/
+
+
+      - name: Deploy inference scripts
+        run: |
+          aws s3 sync \
+            src/inference/ \
+            s3://${DATA_BUCKET}/scripts/sagemaker/inference/
+
+
+      - name: Deploy MLflow scripts
+        run: |
+          aws s3 sync \
+            src/mlflow/ \
+            s3://${DATA_BUCKET}/scripts/sagemaker/mlflow/
+
+
+      - name: Deployment complete
+        run: |
+          echo "Customer Churn MLOps deployment completed successfully."

@@ -28,6 +28,52 @@ TEST_PREFIX = "training/test/"
 
 MODEL_OUTPUT_PREFIX = "models/xgboost/"
 
+def notify_failure(context):
+
+    sns = boto3.client(
+        "sns",
+        region_name=REGION,
+    )
+
+    dag_id = context["dag"].dag_id
+
+    task_id = (
+        context["task_instance"]
+        .task_id
+    )
+
+    run_id = context.get(
+        "run_id",
+        "unknown"
+    )
+
+    exception = context.get(
+        "exception",
+        "Unknown error"
+    )
+
+    message = (
+        f"Airflow task failed.\n\n"
+        f"DAG: {dag_id}\n"
+        f"Task: {task_id}\n"
+        f"Run ID: {run_id}\n"
+        f"Error: {exception}"
+    )
+
+    sns.publish(
+        TopicArn=(
+            "arn:aws:sns:ap-south-1:"
+            "558311101304:"
+            "customer-churn-airflow-alerts"
+        ),
+
+        Subject=(
+            f"FAILED: {dag_id} / {task_id}"
+        ),
+
+        Message=message,
+    )
+
 
 def get_s3_client():
     return boto3.client(
@@ -566,61 +612,159 @@ def check_quality_gate(**context):
 # Placeholder tasks
 # --------------------------------------------------
 
-def log_training_to_mlflow(**context):
+def run_mlflow_logging_job(**context):
 
     sm = get_sm_client()
+
     ti = context["ti"]
 
-    job_name = ti.xcom_pull(
+    training_job_name = ti.xcom_pull(
         task_ids="run_training_job",
         key="training_job_name",
     )
 
-    model_artifact_uri = ti.xcom_pull(
-        task_ids="wait_for_training",
-        key="model_artifact_uri",
+    timestamp = datetime.utcnow().strftime(
+        "%Y%m%d-%H%M%S"
     )
 
-    if not job_name:
-        raise RuntimeError(
-            "Training job name was not received."
-        )
-
-    response = sm.describe_training_job(
-        TrainingJobName=job_name
+    job_name = (
+        f"customer-churn-mlflow-"
+        f"{timestamp}"
     )
 
-    hyperparameters = response.get(
-        "HyperParameters",
-        {}
+    image_uri = (
+        "720646828776.dkr.ecr."
+        "ap-south-1.amazonaws.com/"
+        "sagemaker-scikit-learn:"
+        "1.2-1-cpu-py3"
     )
 
-    final_metrics = response.get(
-        "FinalMetricDataList",
-        []
+    command = (
+        "pip install "
+        "-r /opt/ml/processing/code/requirements.txt "
+        "&& python3 "
+        "/opt/ml/processing/code/log_training_job.py "
+        f"--training-job-name {training_job_name}"
     )
 
-    metrics = {}
+    sm.create_processing_job(
 
-    for metric in final_metrics:
-        metrics[metric["MetricName"]] = float(
-            metric["Value"]
-        )
+        ProcessingJobName=job_name,
 
-    print(f"Training job: {job_name}")
-    print(f"Model artifact: {model_artifact_uri}")
-    print(f"Hyperparameters: {hyperparameters}")
-    print(f"Training metrics: {metrics}")
+        RoleArn=SAGEMAKER_ROLE_ARN,
+
+        AppSpecification={
+            "ImageUri": image_uri,
+
+            "ContainerEntrypoint": [
+                "bash",
+                "-c",
+                command,
+            ],
+        },
+
+        ProcessingResources={
+            "ClusterConfig": {
+                "InstanceCount": 1,
+                "InstanceType": "ml.m5.large",
+                "VolumeSizeInGB": 10,
+            }
+        },
+
+        ProcessingInputs=[
+            {
+                "InputName":
+                    "mlflow-code",
+
+                "S3Input": {
+                    "S3Uri": (
+                        f"s3://{DATA_BUCKET}/"
+                        "scripts/sagemaker/mlflow/"
+                    ),
+
+                    "LocalPath":
+                        "/opt/ml/processing/code",
+
+                    "S3DataType":
+                        "S3Prefix",
+
+                    "S3InputMode":
+                        "File",
+                },
+            }
+        ],
+
+        StoppingCondition={
+            "MaxRuntimeInSeconds":
+                1800
+        },
+    )
+
+    print(
+        f"MLflow Processing Job: "
+        f"{job_name}"
+    )
 
     ti.xcom_push(
-        key="training_hyperparameters",
-        value=hyperparameters,
+        key="mlflow_job_name",
+        value=job_name,
     )
 
-    ti.xcom_push(
-        key="training_metrics",
-        value=metrics,
+def wait_for_mlflow_logging(**context):
+
+    sm = get_sm_client()
+
+    job_name = (
+        context["ti"]
+        .xcom_pull(
+            task_ids="run_mlflow_logging_job",
+            key="mlflow_job_name",
+        )
     )
+
+    while True:
+
+        response = (
+            sm.describe_processing_job(
+                ProcessingJobName=job_name
+            )
+        )
+
+        status = response[
+            "ProcessingJobStatus"
+        ]
+
+        print(
+            f"MLflow logging job "
+            f"{job_name}: {status}"
+        )
+
+        if status == "Completed":
+
+            print(
+                "MLflow logging completed."
+            )
+
+            return
+
+        if status in {
+            "Failed",
+            "Stopped",
+        }:
+
+            reason = response.get(
+                "FailureReason",
+                "No failure reason returned.",
+            )
+
+            raise RuntimeError(
+                f"MLflow logging failed. "
+                f"Status={status}. "
+                f"Reason={reason}"
+            )
+
+        time.sleep(30)
+
 
 
 def tune_threshold(**context):
@@ -785,6 +929,7 @@ default_args = {
     "retry_delay": timedelta(
         minutes=5
     ),
+    "on_failure_callback": notify_failure,
 }
 
 
@@ -805,7 +950,7 @@ with DAG(
         1
     ),
 
-    schedule=None,
+    schedule="0 3 * * 0",
 
     catchup=False,
 
@@ -832,9 +977,14 @@ with DAG(
         python_callable=wait_for_training,
     )
 
-    log_mlflow = PythonOperator(
-        task_id="log_training_to_mlflow",
-        python_callable=log_training_to_mlflow,
+    start_mlflow = PythonOperator(
+        task_id="run_mlflow_logging_job",
+        python_callable=run_mlflow_logging_job,
+    )
+
+    wait_mlflow = PythonOperator(
+        task_id="wait_for_mlflow_logging",
+        python_callable=wait_for_mlflow_logging,
     )
 
     start_evaluation = PythonOperator(
@@ -860,8 +1010,6 @@ with DAG(
     check_data \
         >> start_training \
         >> wait_training \
-        >> log_mlflow \
-        >> start_evaluation \
-        >> wait_evaluation \
-        >> gate \
-        >> register
+        >> start_mlflow \
+        >> wait_mlflow \
+        >> start_evaluation

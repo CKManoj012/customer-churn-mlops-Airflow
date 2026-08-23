@@ -56,7 +56,51 @@ SOURCE_FILES = {
     },
 }
 
+def notify_failure(context):
 
+    sns = boto3.client(
+        "sns",
+        region_name=REGION,
+    )
+
+    dag_id = context["dag"].dag_id
+
+    task_id = (
+        context["task_instance"]
+        .task_id
+    )
+
+    run_id = context.get(
+        "run_id",
+        "unknown"
+    )
+
+    exception = context.get(
+        "exception",
+        "Unknown error"
+    )
+
+    message = (
+        f"Airflow task failed.\n\n"
+        f"DAG: {dag_id}\n"
+        f"Task: {task_id}\n"
+        f"Run ID: {run_id}\n"
+        f"Error: {exception}"
+    )
+
+    sns.publish(
+        TopicArn=(
+            "arn:aws:sns:ap-south-1:"
+            "558311101304:"
+            "customer-churn-airflow-alerts"
+        ),
+
+        Subject=(
+            f"FAILED: {dag_id} / {task_id}"
+        ),
+
+        Message=message,
+    )
 # --------------------------------------------------
 # AWS clients
 # --------------------------------------------------
@@ -473,6 +517,8 @@ default_args = {
 
     "retry_delay":
         timedelta(minutes=5),
+        
+    "on_failure_callback": notify_failure,
 }
 
 
@@ -493,7 +539,7 @@ with DAG(
         1
     ),
 
-    schedule=None,
+    schedule="0 1 * * 0",
 
     catchup=False,
 
