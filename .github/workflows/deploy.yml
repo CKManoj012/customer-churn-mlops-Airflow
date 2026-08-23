@@ -103,7 +103,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::558311101304:role/CustomerChurnGitHubDeploymentRole
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ap-south-1
 
 
       - name: Verify AWS identity
